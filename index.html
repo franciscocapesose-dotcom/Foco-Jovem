@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FocoJovem</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--navy:#0B1F5C;--navy2:#13307F;--accent:#2F6BFF;--bg:#F3F6FC;--card:#fff;--ink:#0E1B3D;--mute:#6A7799;--line:#E1E7F3;--soft:#EAF0FF;--ok:#12A272;--warn:#E8890C;--bad:#E04761;--nav-bg:#0B1F5C;--nav-ink:#C9D5F5;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
@@ -181,35 +182,48 @@ function seed(){
   {id:uid(),t:"Ler 6 livros neste semestre",p:33,date:k(90)},
   {id:uid(),t:"Passar no simulado do ENEM",p:20,date:k(120)}]}
 }
-var USER=null;
+var SUPABASE_URL="https://rxyvpkshyhptyrcybbbd.supabase.co",SUPABASE_KEY="sb_publishable_2bCb3t3T0Q9kjJH1F5n1Wg_hBKCv8HK";
+var CONFIGURED=SUPABASE_URL.indexOf("SEU-PROJETO")<0&&typeof supabase!=="undefined";
+var sb=CONFIGURED?supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
+var USER=null,timer=null,LOADED=false;
 function empty(n){return{name:n,tasks:[],plan:[],habits:[],goals:[]}}
-function load(){try{var r=localStorage.getItem(KEY+".data."+USER.email);if(r){var d=JSON.parse(r);if(d&&d.tasks)return d}}catch(e){}return empty(USER.name)}
-function accs(){try{return JSON.parse(localStorage.getItem(KEY+".accounts")||"{}")}catch(e){return{}}}
-async function hp(pw,salt){var en=new TextEncoder(),k=await crypto.subtle.importKey("raw",en.encode(pw),"PBKDF2",false,["deriveBits"]),b=await crypto.subtle.deriveBits({name:"PBKDF2",salt:en.encode(salt),iterations:100000,hash:"SHA-256"},k,256);return Array.from(new Uint8Array(b)).map(function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
-function enter(em){var a=accs()[em];USER={email:em,name:a.name};try{localStorage.setItem(KEY+".session",em)}catch(e){}document.getElementById("auth").hidden=true;document.getElementById("app").hidden=false;tab="dash";filter="todas";weekOff=0;S=load();S.name=a.name;save();render();window.scrollTo(0,0)}
+async function loadRemote(){var r=await sb.from("user_data").select("data").eq("user_id",USER.id).maybeSingle();if(r.error)throw r.error;var d=r.data&&r.data.data;return d&&d.tasks?d:empty(USER.name)}
+async function enter(u){
+ USER={id:u.id,name:(u.user_metadata&&u.user_metadata.name)||(u.email||"").split("@")[0]};LOADED=false;
+ try{S=await loadRemote()}catch(e){USER=null;showAuth("login");toast("Não foi possível carregar seus dados. Tente novamente.");return}
+ LOADED=true;S.name=USER.name;
+ document.getElementById("auth").hidden=true;document.getElementById("app").hidden=false;
+ tab="dash";filter="todas";weekOff=0;render();window.scrollTo(0,0)}
 function showAuth(mode){
  var A=document.getElementById("auth"),su=mode==="signup";
  document.getElementById("app").hidden=true;A.hidden=false;
  A.innerHTML='<form class="box" novalidate><div class="logo" style="padding:0;color:var(--ink)"><svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="9" fill="#2F6BFF"/><circle cx="16" cy="16" r="8" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="16" r="2.8" fill="#fff"/></svg>FocoJovem</div><div><h2 style="margin:0 0 2px">'+(su?"Criar sua conta":"Entrar")+'</h2><div style="color:var(--mute);font-size:14px">'+(su?"Tudo o que você fizer fica salvo na sua conta.":"Entre para continuar de onde parou.")+'</div></div>'+(su?'<label>Nome<input name="name" autocomplete="name" maxlength="40"></label>':'')+'<label>E-mail<input name="email" type="email" autocomplete="email"></label><label>Senha<input name="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'"></label><div class="err" role="alert"></div><button class="btn">'+(su?"Criar conta":"Entrar")+'</button><div style="text-align:center;font-size:14px;color:var(--mute)">'+(su?"Já tem conta? ":"Primeira vez aqui? ")+'<button type="button" class="link" data-sw>'+(su?"Entrar":"Criar conta")+'</button></div></form>';
- var f=A.querySelector("form"),er=f.querySelector(".err");
+ var f=A.querySelector("form"),er=f.querySelector(".err"),bt=f.querySelector(".btn");
  f.querySelector("[data-sw]").onclick=function(){showAuth(su?"login":"signup")};
- f.onsubmit=async function(e){e.preventDefault();er.textContent="";var em=f.elements.email.value.trim().toLowerCase(),pw=f.elements.pw.value,ac=accs();
+ f.onsubmit=async function(e){e.preventDefault();er.textContent="";
+  if(!CONFIGURED){er.textContent="Site ainda não configurado: preencha SUPABASE_URL e SUPABASE_KEY no código.";return}
+  var em=f.elements.email.value.trim().toLowerCase(),pw=f.elements.pw.value;
+  if(!/^\S+@\S+\.\S+$/.test(em)){er.textContent="Digite um e-mail válido.";return}
+  if(pw.length<6){er.textContent="A senha precisa ter pelo menos 6 caracteres.";return}
+  bt.disabled=true;
   try{
    if(su){var nm=f.elements.name.value.trim();
-    if(!nm){er.textContent="Informe seu nome.";return}
-    if(!/^\S+@\S+\.\S+$/.test(em)){er.textContent="Digite um e-mail válido.";return}
-    if(pw.length<6){er.textContent="A senha precisa ter pelo menos 6 caracteres.";return}
-    if(ac[em]){er.textContent="Este e-mail já tem conta. Clique em Entrar.";return}
-    var salt=uid()+uid();ac[em]={name:nm,salt:salt,hash:await hp(pw,salt)};localStorage.setItem(KEY+".accounts",JSON.stringify(ac));enter(em)
+    if(!nm){er.textContent="Informe seu nome.";bt.disabled=false;return}
+    var r=await sb.auth.signUp({email:em,password:pw,options:{data:{name:nm}}});
+    if(r.error)throw r.error;
+    if(r.data.session){await enter(r.data.user)}else{showAuth("login");toast("Conta criada! Confirme o e-mail que enviamos e depois entre.")}
    }else{
-    var a=ac[em],h=a?await hp(pw,a.salt):null;
-    if(!a||h!==a.hash){er.textContent="E-mail ou senha incorretos.";return}
-    enter(em)}
-  }catch(x){er.textContent="Não foi possível usar a conta neste navegador."}
+    var l=await sb.auth.signInWithPassword({email:em,password:pw});
+    if(l.error)throw l.error;
+    await enter(l.data.user)}
+  }catch(x){var m=x&&x.message||"";bt.disabled=false;
+   er.textContent=/invalid login/i.test(m)?"E-mail ou senha incorretos.":/already registered/i.test(m)?"Este e-mail já tem conta. Clique em Entrar.":/not confirmed/i.test(m)?"Confirme seu e-mail antes de entrar.":/rate limit/i.test(m)?"Muitas tentativas. Aguarde um pouco.":"Não foi possível concluir. Tente novamente."}
  };
  f.elements[0].focus();
 }
-function save(){if(!USER||!S)return;try{localStorage.setItem(KEY+".data."+USER.email,JSON.stringify(S))}catch(e){}}
+function flush(){timer=null;if(!USER||!LOADED)return Promise.resolve();return sb.from("user_data").upsert({user_id:USER.id,data:S,updated_at:new Date().toISOString()}).then(function(r){if(r.error)toast("Erro ao salvar. Verifique sua conexão.")})}
+function save(){if(!USER||!S||!LOADED)return;clearTimeout(timer);timer=setTimeout(flush,400)}
+document.addEventListener("visibilitychange",function(){if(document.hidden&&timer){clearTimeout(timer);flush()}});
 function toast(m){var e=document.createElement("div");e.className="toast";e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove()},1800)}
 
 function chk(on,act,id,extra){return '<button class="chk'+(on?' on':'')+'" data-act="'+act+'" data-id="'+id+'"'+(extra||'')+' aria-pressed="'+on+'" aria-label="Marcar como feita">'+ICON.ck+'</button>'}
@@ -308,12 +322,11 @@ document.addEventListener("click",function(e){
  else if(a==="gd"){if(confirm("Excluir esta meta?")){S.goals=S.goals.filter(function(g){return g.id!==id});commit();toast("Meta excluída")}}
 });
 document.addEventListener("keydown",function(e){if(e.key==="Enter"&&e.target.id==="nt"){var b=document.querySelector('[data-act="ta"]');if(b)b.click()}});
-document.getElementById("logout").onclick=function(){try{localStorage.removeItem(KEY+".session")}catch(e){}USER=null;S=null;showAuth("login")};
+document.getElementById("logout").onclick=async function(){clearTimeout(timer);await flush();LOADED=false;USER=null;S=null;try{await sb.auth.signOut()}catch(e){}showAuth("login")};
 document.getElementById("theme").onclick=function(){var r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;r.dataset.theme=dark?"light":"dark";try{localStorage.setItem(KEY+".theme",r.dataset.theme)}catch(e){}};
 try{var th=localStorage.getItem(KEY+".theme");if(th)document.documentElement.dataset.theme=th}catch(e){}
-var se=null;try{se=localStorage.getItem(KEY+".session")}catch(e){}
-var ac0=accs();
-if(se&&ac0[se])enter(se);else showAuth(Object.keys(ac0).length?"login":"signup");
+if(!CONFIGURED){showAuth("login");document.querySelector("#auth .err").textContent="Site ainda não configurado: preencha SUPABASE_URL e SUPABASE_KEY no código."}
+else sb.auth.getSession().then(function(r){var s=r.data&&r.data.session;if(s)enter(s.user);else showAuth("login")});
 })();
 </script>
 </body>
