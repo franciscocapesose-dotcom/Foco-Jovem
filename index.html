@@ -115,6 +115,7 @@ input,select{background:var(--card);border:1px solid var(--line);border-radius:1
 .auth .box{background:var(--card);border-radius:20px;padding:28px;width:100%;max-width:400px;display:grid;gap:14px}
 .auth label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--mute)}
 .auth .err{color:var(--bad);font-size:13px;min-height:18px;font-weight:600}
+.notice{background:var(--soft);border-left:4px solid var(--accent);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.45}
 .link{background:none;border:0;color:var(--accent);font-weight:700;padding:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -182,7 +183,7 @@ function seed(){
   {id:uid(),t:"Ler 6 livros neste semestre",p:33,date:k(90)},
   {id:uid(),t:"Passar no simulado do ENEM",p:20,date:k(120)}]}
 }
-var SUPABASE_URL="https://rxyvpkshyhptyrcybbbd.supabase.co",SUPABASE_KEY="sb_publishable_2bCb3t3T0Q9kjJH1F5n1Wg_hBKCv8HK";
+var SUPABASE_URL="https://SEU-PROJETO.supabase.co",SUPABASE_KEY="SUA-CHAVE-ANON-PUBLICA";
 var CONFIGURED=SUPABASE_URL.indexOf("SEU-PROJETO")<0&&typeof supabase!=="undefined";
 var sb=CONFIGURED?supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 var USER=null,timer=null,LOADED=false;
@@ -190,14 +191,14 @@ function empty(n){return{name:n,tasks:[],plan:[],habits:[],goals:[]}}
 async function loadRemote(){var r=await sb.from("user_data").select("data").eq("user_id",USER.id).maybeSingle();if(r.error)throw r.error;var d=r.data&&r.data.data;return d&&d.tasks?d:empty(USER.name)}
 async function enter(u){
  USER={id:u.id,name:(u.user_metadata&&u.user_metadata.name)||(u.email||"").split("@")[0]};LOADED=false;
- try{S=await loadRemote()}catch(e){USER=null;showAuth("login");toast("Não foi possível carregar seus dados. Tente novamente.");return}
+ try{S=await loadRemote()}catch(e){USER=null;showAuth("login");document.querySelector("#auth .err").textContent="Não foi possível carregar seus dados. Detalhe técnico: "+((e&&(e.message||e.code))||"erro desconhecido");return}
  LOADED=true;S.name=USER.name;
  document.getElementById("auth").hidden=true;document.getElementById("app").hidden=false;
  tab="dash";filter="todas";weekOff=0;render();window.scrollTo(0,0)}
-function showAuth(mode){
+function showAuth(mode,notice){
  var A=document.getElementById("auth"),su=mode==="signup";
  document.getElementById("app").hidden=true;A.hidden=false;
- A.innerHTML='<form class="box" novalidate><div class="logo" style="padding:0;color:var(--ink)"><svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="9" fill="#2F6BFF"/><circle cx="16" cy="16" r="8" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="16" r="2.8" fill="#fff"/></svg>FocoJovem</div><div><h2 style="margin:0 0 2px">'+(su?"Criar sua conta":"Entrar")+'</h2><div style="color:var(--mute);font-size:14px">'+(su?"Tudo o que você fizer fica salvo na sua conta.":"Entre para continuar de onde parou.")+'</div></div>'+(su?'<label>Nome<input name="name" autocomplete="name" maxlength="40"></label>':'')+'<label>E-mail<input name="email" type="email" autocomplete="email"></label><label>Senha<input name="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'"></label><div class="err" role="alert"></div><button class="btn">'+(su?"Criar conta":"Entrar")+'</button><div style="text-align:center;font-size:14px;color:var(--mute)">'+(su?"Já tem conta? ":"Primeira vez aqui? ")+'<button type="button" class="link" data-sw>'+(su?"Entrar":"Criar conta")+'</button></div></form>';
+ A.innerHTML='<form class="box" novalidate><div class="logo" style="padding:0;color:var(--ink)"><svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="9" fill="#2F6BFF"/><circle cx="16" cy="16" r="8" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="16" r="2.8" fill="#fff"/></svg>FocoJovem</div><div><h2 style="margin:0 0 2px">'+(su?"Criar sua conta":"Entrar")+'</h2><div style="color:var(--mute);font-size:14px">'+(su?"Tudo o que você fizer fica salvo na sua conta.":"Entre para continuar de onde parou.")+'</div></div>'+(notice?'<div class="notice">'+notice+'</div>':'')+(su?'<label>Nome<input name="name" autocomplete="name" maxlength="40"></label>':'')+'<label>E-mail<input name="email" type="email" autocomplete="email"></label><label>Senha<input name="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'"></label><div class="err" role="alert"></div><button class="btn">'+(su?"Criar conta":"Entrar")+'</button><div style="text-align:center;font-size:14px;color:var(--mute)">'+(su?"Já tem conta? ":"Primeira vez aqui? ")+'<button type="button" class="link" data-sw>'+(su?"Entrar":"Criar conta")+'</button></div></form>';
  var f=A.querySelector("form"),er=f.querySelector(".err"),bt=f.querySelector(".btn");
  f.querySelector("[data-sw]").onclick=function(){showAuth(su?"login":"signup")};
  f.onsubmit=async function(e){e.preventDefault();er.textContent="";
@@ -211,7 +212,7 @@ function showAuth(mode){
     if(!nm){er.textContent="Informe seu nome.";bt.disabled=false;return}
     var r=await sb.auth.signUp({email:em,password:pw,options:{data:{name:nm}}});
     if(r.error)throw r.error;
-    if(r.data.session){await enter(r.data.user)}else{showAuth("login");toast("Conta criada! Confirme o e-mail que enviamos e depois entre.")}
+    if(r.data.session){await enter(r.data.user)}else{showAuth("login","Conta criada! Enviamos um e-mail de confirmação para "+esc(em)+". Abra o e-mail, clique no link de confirmação e depois volte aqui para entrar. Se não encontrar, olhe a caixa de spam.")}
    }else{
     var l=await sb.auth.signInWithPassword({email:em,password:pw});
     if(l.error)throw l.error;
